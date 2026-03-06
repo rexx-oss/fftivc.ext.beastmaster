@@ -1,0 +1,66 @@
+{
+  "ModId": "fftivc.ext.beastmaster",
+  "ModName": "Beastmaster Extensions",
+  "ModAuthor": "Epic Brownie",
+  "ModVersion": "1.0.0",
+  "ModDescription": "Beastmaster Extensions",
+  "ModDll": "fftivc.ext.beastmaster.dll",
+  "ModIcon": "Preview.png",
+  "ModR2RManagedDll32": "x86/fftivc.ext.beastmaster.dll",
+  "ModR2RManagedDll64": "x64/fftivc.ext.beastmaster.dll",
+  "ModNativeDll32": "",
+  "ModNativeDll64": "",
+  "Tags": [],
+  "CanUnload": null,
+  "HasExports": null,
+  "IsLibrary": false,
+  "ReleaseMetadataFileName": "fftivc.ext.beastmaster.ReleaseMetadata.json",
+  "IgnoreRegexes": [ ".*\\.json" ],
+  "IncludeRegexes": [
+    "\\.deps\\.json",
+    "\\.runtimeconfig\\.json",
+    "ModConfig\\.json"
+  ],
+  "PluginData": {
+    "GitHubDependencies": {
+      "IdToConfigMap": {
+        "reloaded.sharedlib.hooks": {
+          "Config": {
+            "UserName": "Sewer56",
+            "RepositoryName": "Reloaded.SharedLib.Hooks.ReloadedII",
+            "UseReleaseTag": true,
+            "AssetFileName": "reloaded.sharedlib.hooks.zip"
+          },
+          "ReleaseMetadataName": "Sewer56.Update.ReleaseMetadata.json"
+        }
+      },
+      "Reloaded.Memory.SigScan.ReloadedII": {
+        "Config": {
+          "UserName": "Reloaded-Project",
+          "RepositoryName": "Reloaded.Memory.SigScan",
+          "UseReleaseTag": false,
+          "AssetFileName": "Mod.zip"
+        },
+        "ReleaseMetadataName": "Reloaded.Memory.SigScan.ReloadedII.ReleaseMetadata.json"
+      },
+      "fftivc.utility.modloader": {
+        "Config": {
+          "UserName": "Nenkai",
+          "RepositoryName": "fftivc.utility.modloader",
+          "UseReleaseTag": true,
+          "AssetFileName": "Mod.zip"
+        },
+        "ReleaseMetadataName": "fftivc.utility.modloader.ReleaseMetadata.json"
+      }
+    }
+  },
+  "IsUniversalMod": false,
+  "ModDependencies": [
+    "Reloaded.Memory.SigScan.ReloadedII",
+    "reloaded.sharedlib.hooks",
+    "fftivc.utility.modloader"
+  ],
+  "OptionalDependencies": [],
+  "SupportedAppId": [ "fft_enhanced.exe" ],
+  "ProjectUrl": "https://github.com/epicbrownie/fftivc.ext.beastmaster"
+}
