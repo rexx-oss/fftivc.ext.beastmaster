@@ -1,24 +1,29 @@
-name: Build Beastmaster Mod
+name: Build and Release (On Demand)
 
+# Only runs when triggered manually
 on:
-  workflow_dispatch: # Allows manual trigger from the GitHub Actions tab
-  push:
-    branches: [ "main", "master" ]
-    paths-ignore:
-      - 'README.md'
-      - '.gitignore'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release Tag Version (e.g. v1.0.1)'
+        required: true
+        default: 'v1.0.1'
 
 jobs:
-  build:
-    runs-on: windows-latest # Must be Windows because TargetFramework is net9.0-windows
+  build-and-release:
+    runs-on: windows-latest
+
+    permissions:
+      contents: write # Needed to create the Git tag and publish the Release
 
     env:
-      # Reloaded.Checks.targets requires this variable to exist or the build aborts
       RELOADEDIIMODS: ${{ github.workspace }}/temp_mods
 
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Setup .NET 9 SDK
         uses: actions/setup-dotnet@v4
@@ -34,19 +39,35 @@ jobs:
           --no-restore
           -o "${{ github.workspace }}/publish/fftivc.ext.beastmaster"
 
-      - name: Clean unnecessary build artifacts
+      - name: Clean unnecessary files (.pdb, .xml)
         shell: pwsh
         run: |
           Get-ChildItem -Path "${{ github.workspace }}/publish/fftivc.ext.beastmaster" -Include *.pdb, *.xml -Recurse | Remove-Item -Force
 
-      - name: Archive Mod Folder
+      - name: Package Mod (.zip)
         shell: pwsh
         run: |
-          Compress-Archive -Path "${{ github.workspace }}/publish/fftivc.ext.beastmaster/*" -DestinationPath "${{ github.workspace }}/fftivc.ext.beastmaster-v1.0.1.zip" -Force
+          Compress-Archive -Path "${{ github.workspace }}/publish/fftivc.ext.beastmaster/*" -DestinationPath "${{ github.workspace }}/fftivc.ext.beastmaster-${{ github.event.inputs.version }}.zip" -Force
 
-      - name: Upload Artifact
+      # 1. Uploads to the workflow run's "Artifacts" section
+      - name: Upload Workflow Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: fftivc.ext.beastmaster-v1.0.1
-          path: ${{ github.workspace }}/fftivc.ext.beastmaster-v1.0.1.zip
+          name: fftivc.ext.beastmaster-${{ github.event.inputs.version }}
+          path: ${{ github.workspace }}/fftivc.ext.beastmaster-${{ github.event.inputs.version }}.zip
           retention-days: 30
+
+      # 2. Creates the official Git tag and publishes to the "Releases" section
+      - name: Create Git Tag and GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.event.inputs.version }}
+          name: Beastmaster Extensions ${{ github.event.inputs.version }}
+          draft: false
+          prerelease: false
+          files: ${{ github.workspace }}/fftivc.ext.beastmaster-${{ github.event.inputs.version }}.zip
+          body: |
+            ### Beastmaster Extensions ${{ github.event.inputs.version }}
+            - Fully updated for Final Fantasy Tactics version **1.5.2**.
+            - Fixed `CalculateHeightData` function address resolution.
+            - Corrected pointer arithmetic when fetching unit IDs.
