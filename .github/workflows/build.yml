@@ -1,0 +1,52 @@
+name: Build Beastmaster Mod
+
+on:
+  workflow_dispatch: # Allows manual trigger from the GitHub Actions tab
+  push:
+    branches: [ "main", "master" ]
+    paths-ignore:
+      - 'README.md'
+      - '.gitignore'
+
+jobs:
+  build:
+    runs-on: windows-latest # Must be Windows because TargetFramework is net9.0-windows
+
+    env:
+      # Reloaded.Checks.targets requires this variable to exist or the build aborts
+      RELOADEDIIMODS: ${{ github.workspace }}/temp_mods
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup .NET 9 SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '9.0.x'
+
+      - name: Restore NuGet Packages
+        run: dotnet restore
+
+      - name: Publish Mod
+        run: >
+          dotnet publish -c Release
+          --no-restore
+          -o "${{ github.workspace }}/publish/fftivc.ext.beastmaster"
+
+      - name: Clean unnecessary build artifacts
+        shell: pwsh
+        run: |
+          Get-ChildItem -Path "${{ github.workspace }}/publish/fftivc.ext.beastmaster" -Include *.pdb, *.xml -Recurse | Remove-Item -Force
+
+      - name: Archive Mod Folder
+        shell: pwsh
+        run: |
+          Compress-Archive -Path "${{ github.workspace }}/publish/fftivc.ext.beastmaster/*" -DestinationPath "${{ github.workspace }}/fftivc.ext.beastmaster-v1.0.1.zip" -Force
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: fftivc.ext.beastmaster-v1.0.1
+          path: ${{ github.workspace }}/fftivc.ext.beastmaster-v1.0.1.zip
+          retention-days: 30
