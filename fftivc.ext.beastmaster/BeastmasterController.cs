@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 using fftivc.ext.beastmaster.Configuration;
@@ -88,8 +88,18 @@ namespace fftivc.ext.beastmaster
                     }
 
                     _monsterSkillCheckPrepFnAddress = (nuint)(_processAddress + e.Offset);
-
                     _logger.WriteLine($"[{_modConfig.ModId}] Located the MonsterSkillCheckPrep function @ 0x{_monsterSkillCheckPrepFnAddress:X}");
+
+                    // Fallback: If CalculateHeightData pattern scan failed or hasn't run yet, resolve it directly from MonsterSkillCheckPrep call instruction
+                    if (_calculateHeightDataFnAddress == default)
+                    {
+                        var resolvedAddr = ResolveCalculateHeightDataFromPrep(_monsterSkillCheckPrepFnAddress);
+                        if (resolvedAddr != default)
+                        {
+                            _calculateHeightDataFnAddress = resolvedAddr;
+                            _logger.WriteLine($"[{_modConfig.ModId}] Located CalculateHeightData function (via MonsterSkillCheckPrep call) @ 0x{_calculateHeightDataFnAddress:X}");
+                        }
+                    }
                 });
 
             _startupScanner!.AddMainModuleScan(
@@ -102,31 +112,64 @@ namespace fftivc.ext.beastmaster
                     }
 
                     _monsterSkillCheckFnAddress = (nuint)(_processAddress + e.Offset);
-
                     _logger.WriteLine($"[{_modConfig.ModId}] Located the MonsterSkillCheck function @ 0x{_monsterSkillCheckFnAddress:X}");
                 });
 
+            // Updated pattern with wildcards on the prologue to support 1.5.2+ compiler variations
             _startupScanner!.AddMainModuleScan(
-                "48 89 E0 48 89 58 08 48 89 68 10 48 89 70 18 48 89 78 20 41 56 41 57 31 C0", e =>
+                "48 ?? ?? 48 89 58 08 48 89 68 10 48 89 70 18 48 89 78 20 41 56 41 57", e =>
                 {
                     if (!e.Found)
                     {
-                        _logger.WriteLine($"[{_modConfig.ModId}] - Failed to locate CalculateHeightData function", _logger.ColorRed);
+                        // Don't log error here yet; fallback resolver inside MonsterSkillCheckPrep will catch it
                         return;
                     }
 
-                    _calculateHeightDataFnAddress = (nuint)(_processAddress + e.Offset);
-
-                    _logger.WriteLine($"[{_modConfig.ModId}] Located the CalculateHeightData function @ 0x{_calculateHeightDataFnAddress:X}");
+                    if (_calculateHeightDataFnAddress == default)
+                    {
+                        _calculateHeightDataFnAddress = (nuint)(_processAddress + e.Offset);
+                        _logger.WriteLine($"[{_modConfig.ModId}] Located the CalculateHeightData function @ 0x{_calculateHeightDataFnAddress:X}");
+                    }
                 });
+        }
+
+        private unsafe nuint ResolveCalculateHeightDataFromPrep(nuint prepAddress)
+        {
+            byte* pCode = (byte*)prepAddress;
+
+            // Search the first 0x50 bytes of MonsterSkillCheckPrep for the 'E8' (CALL rel32) to CalculateHeightData
+            for (int i = 0; i < 0x50; i++)
+            {
+                if (pCode[i] == 0xE8)
+                {
+                    int relOffset = *(int*)(pCode + i + 1);
+                    nuint target = (nuint)((nint)(pCode + i + 5) + relOffset);
+                    return target;
+                }
+            }
+
+            return default;
         }
 
         public unsafe void Install()
         {
+            // If the pattern scan didn't locate CalculateHeightData, attempt call resolution one last time
+            if (_calculateHeightDataFnAddress == default && _monsterSkillCheckPrepFnAddress != default)
+            {
+                _calculateHeightDataFnAddress = ResolveCalculateHeightDataFromPrep(_monsterSkillCheckPrepFnAddress);
+                if (_calculateHeightDataFnAddress != default)
+                {
+                    _logger.WriteLine($"[{_modConfig.ModId}] Located CalculateHeightData function (via fallback call resolution) @ 0x{_calculateHeightDataFnAddress:X}");
+                }
+            }
+
             if (_monsterSkillCheckPrepFnAddress == default ||
                 _monsterSkillCheckFnAddress == default ||
                 _calculateHeightDataFnAddress == default)
+            {
+                _logger.WriteLine($"[{_modConfig.ModId}] - Cannot install hooks: missing required function addresses.", _logger.ColorRed);
                 return;
+            }
 
             var loadAddress = _monsterSkillCheckFnAddress + BattleUnitLoadOffset;
 
@@ -147,6 +190,8 @@ namespace fftivc.ext.beastmaster
 
             CalculateHeightData = _hooks
                 .CreateWrapper<CalculateHeightDataDelegate>((long)_calculateHeightDataFnAddress, out var _);
+
+            _logger.WriteLine($"[{_modConfig.ModId}] Beastmaster hooks successfully initialized and installed.");
         }
 
         public void Update(Config configuration)
@@ -177,8 +222,6 @@ namespace fftivc.ext.beastmaster
                         pCheckUnit->SupportAbilities4.HasFlag(Data.Flags.SupportAbilityFlags4.Beastmaster) &&
                         (byte)((pUnit->EntdFlags ^ pCheckUnit->EntdFlags) & EntdTeamBits) == 0)
                         return 1;
-
-                    pCheckUnit += BattleUnitSize;
                 }
 
                 return 0;
@@ -188,7 +231,9 @@ namespace fftivc.ext.beastmaster
 
             var range = Math.Max(1, Math.Min(8, _config.BeastmasterRange));
 
-            var pHeightData = CalculateHeightData(&data, *(byte*)(pUnit + UnitIdOffset));
+            // Fixed byte-offset calculation
+            var unitId = *((byte*)pUnit + UnitIdOffset);
+            var pHeightData = CalculateHeightData(&data, unitId);
 
             for (var y = -range; y < range; ++y)
             {
